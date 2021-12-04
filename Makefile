@@ -1,7 +1,7 @@
 C = gcc
 CFLAGS = -Wall -g
 .PHONY: clean all
-all: receiver sender server
+all: receiver sender server 
 
 receiver: receiver.c
 	${C} ${CFLAGS} -o receiver receiver.c
