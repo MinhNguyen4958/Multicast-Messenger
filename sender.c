@@ -12,7 +12,19 @@
 
 #define PORT "30000" // the port client will be connecting to 
 
+ssize_t readline(char **lineptr, FILE *stream)
+{
+  size_t len = 0;  // Size of the buffer, ignored.
 
+  ssize_t chars = getline(lineptr, &len, stream);
+
+  if ((*lineptr)[chars - 1] == '\n') {
+      (*lineptr)[chars - 1] = '\0';
+      --chars;
+      }
+
+  return chars;
+}
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
 {
@@ -30,8 +42,8 @@ int main(int argc, char *argv[])
     int rv;
     char s[INET6_ADDRSTRLEN];
 
-    if (argc != 3) {
-        fprintf(stderr,"usage: sender hostname message\n");
+    if (argc != 2) {
+        fprintf(stderr,"usage: sender hostname\n");
         exit(1);
     }
 
@@ -66,18 +78,27 @@ int main(int argc, char *argv[])
         return 2;
     }
 
-    inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
-            s, sizeof s);
-    printf("sender: connecting to %s\n", s);
+    inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
+    printf("sender: connected to the server\n");
 
     freeaddrinfo(servinfo); // all done with this structure
 
-    if ((numbytes = send(sockfd, argv[2], strlen(argv[2]), 0)) == -1) {
-        perror("send");
-        exit(1);
-    }
+    char *message = NULL;
+    ssize_t bytes;
 
-    printf("sender: sent \"%s\" to the server\n",argv[2]);
+    while(1) {
+        printf("Enter a message: ");
+        if ( (bytes = readline(&message, stdin)) == -1) {
+            perror("getline");
+        }
+
+        if ((numbytes = send(sockfd, message, strlen(message), 0)) == -1) {
+            perror("send");
+            exit(1);
+        }
+        printf("sender: sent \"%s\" to the server\n", message);
+        free(message);
+    }
 
     close(sockfd);
 

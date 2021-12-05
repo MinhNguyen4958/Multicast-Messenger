@@ -12,7 +12,7 @@
 
 #define PORT "30001" // the port client will be connecting to 
 
-#define MAXDATASIZE 100 // max number of bytes we can get at once 
+#define MAXDATASIZE 1000 // max number of bytes we can get at once 
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -67,21 +67,16 @@ int main(int argc, char *argv[])
         fprintf(stderr, "receiver: failed to connect\n");
         return 2;
     }
-
-    inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
-            s, sizeof s);
-    printf("receiver: connecting to %s\n", s);
-
     freeaddrinfo(servinfo); // all done with this structure
 
-    if ((numbytes = recv(sockfd, buf, MAXDATASIZE-1, 0)) == -1) {
+    inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
+    printf("receiver: connected to the server\n");
+
+    if ((numbytes = recv(sockfd, buf, MAXDATASIZE, 0)) == -1) {
         perror("recv");
         exit(1);
-    }
-
-    buf[numbytes] = '\0';
-
-    printf("receiver: received '%s'\n",buf);
+    } 
+    printf("receiver: received %s\n",buf);
 
     close(sockfd);
 
