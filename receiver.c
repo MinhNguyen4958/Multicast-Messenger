@@ -10,7 +10,7 @@
 
 #include <arpa/inet.h>
 
-#define PORT "30000" // the port client will be connecting to 
+#define PORT "30001" // the port client will be connecting to 
 
 #define MAXDATASIZE 100 // max number of bytes we can get at once 
 
@@ -50,13 +50,13 @@ int main(int argc, char *argv[])
     for(p = servinfo; p != NULL; p = p->ai_next) {
         if ((sockfd = socket(p->ai_family, p->ai_socktype,
                 p->ai_protocol)) == -1) {
-            perror("client: socket");
+            perror("receiver: socket");
             continue;
         }
 
         if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
             close(sockfd);
-            perror("client: connect");
+            perror("receiver: connect");
             continue;
         }
 
@@ -64,13 +64,13 @@ int main(int argc, char *argv[])
     }
 
     if (p == NULL) {
-        fprintf(stderr, "client: failed to connect\n");
+        fprintf(stderr, "receiver: failed to connect\n");
         return 2;
     }
 
     inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr),
             s, sizeof s);
-    printf("client: connecting to %s\n", s);
+    printf("receiver: connecting to %s\n", s);
 
     freeaddrinfo(servinfo); // all done with this structure
 
@@ -81,7 +81,7 @@ int main(int argc, char *argv[])
 
     buf[numbytes] = '\0';
 
-    printf("client: received '%s'\n",buf);
+    printf("receiver: received '%s'\n",buf);
 
     close(sockfd);
 

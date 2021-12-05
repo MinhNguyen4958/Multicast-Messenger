@@ -11,9 +11,11 @@
 #include <sys/wait.h>
 #include <signal.h>
 
-#define PORT "30000"  // the port users will be connecting to
-
+#define SENDPORT "30000"  // the port senders will be connecting to
+#define RECVPORT "30001"  // the port receivers will be connecting to
 #define BACKLOG 10   // how many pending connections queue will hold
+
+#define MAXBUFLEN 1000
 
 void sigchld_handler(int s)
 {
@@ -36,15 +38,20 @@ void *get_in_addr(struct sockaddr *sa)
     return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-int main(void)
-{
-    int sockfd, new_fd;  // listen on sock_fd, new connection on new_fd
+int main(void) {
+    printf("Port for sender clients: %s\nPort for receiver clients: %s\n", SENDPORT, RECVPORT);
+    int recv_sockfd, new_recvfd, send_sockfd, new_sendfd;  // listen on sock_fd, new connection on new_fd
     struct addrinfo hints, *servinfo, *p;
-    struct sockaddr_storage their_addr; // connector's address information
-    socklen_t sin_size;
+
+    struct sockaddr_storage recv_addr; // receiver's address information
+    struct sockaddr_storage send_addr; // sender's address information
+    
+    socklen_t recv_size, send_size;
+
     struct sigaction sa;
     int yes=1;
-    char s[INET6_ADDRSTRLEN];
+    char receiver[INET6_ADDRSTRLEN];
+    char sender[INET6_ADDRSTRLEN];
     int rv;
 
     memset(&hints, 0, sizeof hints);
@@ -52,27 +59,28 @@ int main(void)
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE; // use my IP
 
-    if ((rv = getaddrinfo(NULL, PORT, &hints, &servinfo)) != 0) {
+    // get the receiver's IP address info
+    if ((rv = getaddrinfo(NULL, RECVPORT, &hints, &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         return 1;
     }
 
     // loop through all the results and bind to the first we can
     for(p = servinfo; p != NULL; p = p->ai_next) {
-        if ((sockfd = socket(p->ai_family, p->ai_socktype,
+        if ((recv_sockfd = socket(p->ai_family, p->ai_socktype,
                 p->ai_protocol)) == -1) {
             perror("server: socket");
             continue;
         }
 
-        if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &yes,
+        if (setsockopt(recv_sockfd, SOL_SOCKET, SO_REUSEADDR, &yes,
                 sizeof(int)) == -1) {
             perror("setsockopt");
             exit(1);
         }
 
-        if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
-            close(sockfd);
+        if (bind(recv_sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+            close(recv_sockfd);
             perror("server: bind");
             continue;
         }
@@ -87,7 +95,49 @@ int main(void)
         exit(1);
     }
 
-    if (listen(sockfd, BACKLOG) == -1) {
+    if (listen(recv_sockfd, BACKLOG) == -1) {
+        perror("listen");
+        exit(1);
+    }
+    
+    
+    // get the sender's IP address info
+    if ((rv = getaddrinfo(NULL, SENDPORT, &hints, &servinfo)) != 0) {
+        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+        return 1;
+    }
+
+    // loop through all the results and bind to the first we can
+    for(p = servinfo; p != NULL; p = p->ai_next) {
+        if ((send_sockfd = socket(p->ai_family, p->ai_socktype,
+                p->ai_protocol)) == -1) {
+            perror("server: socket");
+            continue;
+        }
+
+        if (setsockopt(send_sockfd, SOL_SOCKET, SO_REUSEADDR, &yes,
+                sizeof(int)) == -1) {
+            perror("setsockopt");
+            exit(1);
+        }
+
+        if (bind(send_sockfd, p->ai_addr, p->ai_addrlen) == -1) {
+            close(send_sockfd);
+            perror("server: bind");
+            continue;
+        }
+
+        break;
+    }
+
+    freeaddrinfo(servinfo); // all done with this structure
+
+    if (p == NULL)  {
+        fprintf(stderr, "server: failed to bind\n");
+        exit(1);
+    }
+
+    if (listen(send_sockfd, BACKLOG) == -1) {
         perror("listen");
         exit(1);
     }
@@ -103,26 +153,47 @@ int main(void)
     printf("server: waiting for connections...\n");
 
     while(1) {  // main accept() loop
-        sin_size = sizeof their_addr;
-        new_fd = accept(sockfd, (struct sockaddr *)&their_addr, &sin_size);
-        if (new_fd == -1) {
+        recv_size = sizeof recv_addr;
+        send_size = sizeof send_addr;
+        new_recvfd = accept(recv_sockfd, (struct sockaddr *)&recv_addr, &recv_size);
+        new_sendfd = accept(send_sockfd, (struct sockaddr *)&send_addr, &send_size);
+
+        if (new_recvfd == -1) {
+            perror("accept");
+            continue;
+        }
+        
+        if (new_sendfd == -1) {
             perror("accept");
             continue;
         }
 
-        inet_ntop(their_addr.ss_family,
-            get_in_addr((struct sockaddr *)&their_addr),
-            s, sizeof s);
-        printf("server: got connection from %s\n", s);
+        inet_ntop(recv_addr.ss_family, get_in_addr((struct sockaddr *)&recv_addr), receiver, sizeof receiver);
+        inet_ntop(send_addr.ss_family, get_in_addr((struct sockaddr *)&send_addr), sender, sizeof sender);
 
+        printf("server: got connection from %s, Port: %s\n", sender, SENDPORT);
+        printf("server: got connection from %s, Port: %s\n", receiver, RECVPORT);
         if (!fork()) { // this is the child process
-            close(sockfd); // child doesn't need the listener
-            if (send(new_fd, "Hello, world!", 13, 0) == -1)
+            close(recv_sockfd); // child doesn't need the listener
+            close(send_sockfd); // also for the sender
+            char buf[MAXBUFLEN];
+            int bytes;
+            if ((bytes = recv(new_sendfd, buf, MAXBUFLEN - 1, 0)) == -1) {
+                perror("recv");
+            }
+            // add null terminator to the string
+            buf[bytes] = '\0';
+
+            if (send(new_recvfd, buf, MAXBUFLEN - 1, 0) == -1) {
                 perror("send");
-            close(new_fd);
+            }
+
+            close(new_recvfd);
+            close(new_sendfd);
             exit(0);
         }
-        close(new_fd);  // parent doesn't need this
+        close(new_recvfd);  // parent doesn't need this
+        close(new_sendfd);
     }
 
     return 0;
