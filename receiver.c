@@ -71,12 +71,15 @@ int main(int argc, char *argv[])
 
     inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
     printf("receiver: connected to the server\n");
+    while(1) {
+        if ((numbytes = recv(sockfd, buf, MAXDATASIZE, 0)) == -1) {
+            perror("recv");
+            exit(1);
+        }
+        printf("receiver: received %s\n",buf); 
+    }
 
-    if ((numbytes = recv(sockfd, buf, MAXDATASIZE, 0)) == -1) {
-        perror("recv");
-        exit(1);
-    } 
-    printf("receiver: received %s\n",buf);
+    
 
     close(sockfd);
 

@@ -16,12 +16,12 @@
 #define RECVPORT "30001"  // the port receivers will be connecting to
 #define BACKLOG 10   // how many pending connections queue will hold
 
-#define MAXBUFLEN 1000
+#define MAXBUFLEN 100
 
-pthread_mutex_t SenderLock;
-pthread_mutex_t ReceiverLock;
+pthread_mutex_t bufferLock;
 
-pthread_cond_t ConnectionCond;
+
+pthread_cond_t bufferCond;
 
 pthread_attr_t detached;
 
@@ -56,42 +56,54 @@ void *get_in_addr(struct sockaddr *sa)
 
 void* senderRoutine(void* socket_fd) {
 
-    if(pthread_mutex_lock(&SenderLock) != 0) {
-        perror("pthread_mutex_lock");
-    }
 
     int sender_fd = *(int*) socket_fd;
     
     int bytes; 
-    if ((bytes = recv(sender_fd, buffer, MAXBUFLEN, MSG_NOSIGNAL)) == -1) {
-        perror("recv");
-    }
+    while ((bytes = recv(sender_fd, buffer, MAXBUFLEN, MSG_NOSIGNAL)) > 0) {
+        if(pthread_mutex_lock(&bufferLock) != 0) {
+            perror("pthread_mutex_lock");
+        }
+        printf("server: received %s from sender\n", buffer);
 
-    printf("server: received %s from sender\n", buffer);
+        if (pthread_mutex_unlock(&bufferLock) != 0) {
+           perror("pthread_mutex_unlock");
+        }
+
+        pthread_cond_broadcast(&bufferCond);
+
+    }
     close(sender_fd); 
-
-    if (pthread_mutex_unlock(&SenderLock) != 0) {
-        perror("pthread_mutex_unlock");
-    }
-
     return 0;
 }
 
 void* receiverRoutine(void* socket_fd) {
-    if (pthread_mutex_lock(&ReceiverLock) != 0) {
+    if (pthread_mutex_lock(&bufferLock) != 0) {
         perror("pthread_mutex_lock");
     }
-
-
     int receiver_fd = *(int*) socket_fd; 
-    if (send(receiver_fd, buffer, MAXBUFLEN, MSG_NOSIGNAL) == -1) {
-        perror("send");
-    }
+    printf("Here?\n");
+    
+    while (1) {
+        if (strlen(buffer) == 0) {
 
-    if (pthread_mutex_unlock(&ReceiverLock) != 0) {
-        perror("pthread_mutex_unlock");
+            pthread_cond_wait(&bufferCond, &bufferLock);
+        } else {
+            printf("This is the buffer: %s\n", buffer);
+            if (send(receiver_fd, buffer, MAXBUFLEN, MSG_NOSIGNAL) == -1) {
+                perror("send");
+            }
+            
+            // after sending to the receiver, we clear the buffer
+            memset(buffer,0,strlen(buffer));
+            if (pthread_mutex_unlock(&bufferLock) != 0) {
+                perror("pthread_mutex_unlock");
+            }
+            
+        }
     }
-
+    
+    close(receiver_fd);
     return 0;
 }
 
@@ -155,9 +167,11 @@ void* connectSender() {
             continue;
         }
 
+        // turn this variable passable to the pthread_create
         int *sock_fd = malloc(sizeof(int));
         *sock_fd = new_sendfd;
         pthread_t newSender;
+        
         if (pthread_create(&newSender, &detached, &senderRoutine, sock_fd) != 0) {
             perror("Failed to create detached sender thread");
         }
@@ -243,12 +257,13 @@ void* ConnectReceiver() {
 
 int main(void) {
 
-    if (pthread_mutex_init(&SenderLock,NULL) != 0) {
+    if (pthread_mutex_init(&bufferLock,NULL) != 0) {
         perror("pthread_mutex_init");
         return -1;
     }
 
-    if (pthread_cond_init(&ConnectionCond, NULL) != 0) {
+
+    if (pthread_cond_init(&bufferCond, NULL) != 0) {
         perror("pthread_cond_init");
         return -1;
     }
@@ -286,7 +301,6 @@ int main(void) {
     if (pthread_join(receiverConnection, NULL) != 0) {
         perror("Failed to join receiver connectoin thread\n");
     }
-
 
     return 0;
 }
