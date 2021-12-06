@@ -14,6 +14,7 @@
 
 #define SENDPORT "30000"  // the port senders will be connecting to
 #define RECVPORT "30001"  // the port receivers will be connecting to
+
 #define BACKLOG 10   // how many pending connections queue will hold
 
 #define MAXBUFLEN 100
@@ -43,6 +44,8 @@ int rv;
 int recv_rv;
 
 char buffer[MAXBUFLEN];
+
+int recv_fds[BACKLOG];
 
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
@@ -82,20 +85,31 @@ void* receiverRoutine(void* socket_fd) {
         perror("pthread_mutex_lock");
     }
     int receiver_fd = *(int*) socket_fd; 
-    printf("Here?\n");
-    
+
+
+    int firstCount = 0;
+    while(recv_fds[firstCount] != 0) {
+        firstCount++;
+    }
+
+    recv_fds[firstCount] = receiver_fd;
     while (1) {
         if (strlen(buffer) == 0) {
-
             pthread_cond_wait(&bufferCond, &bufferLock);
+
         } else {
-            printf("This is the buffer: %s\n", buffer);
-            if (send(receiver_fd, buffer, MAXBUFLEN, MSG_NOSIGNAL) == -1) {
+            int counter = 0;
+            while(recv_fds[counter] != 0) {
+             if (send(recv_fds[counter], buffer, MAXBUFLEN, MSG_NOSIGNAL) == -1) {
                 perror("send");
-            }
-            
+                }
+                counter++;
+            }            
+
+
             // after sending to the receiver, we clear the buffer
             memset(buffer,0,strlen(buffer));
+
             if (pthread_mutex_unlock(&bufferLock) != 0) {
                 perror("pthread_mutex_unlock");
             }
@@ -280,6 +294,7 @@ int main(void) {
 
     printf("Port for sender clients: %s\nPort for receiver clients: %s\n", SENDPORT, RECVPORT);
 
+    memset(&recv_fds, 0, sizeof(recv_fds));
 
     pthread_t senderConnection, receiverConnection;
 
