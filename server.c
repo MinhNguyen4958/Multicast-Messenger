@@ -12,12 +12,13 @@
 #include <signal.h>
 #include <pthread.h>
 
+
 #define SENDPORT "30000"  // the port senders will be connecting to
 #define RECVPORT "30001"  // the port receivers will be connecting to
 
 #define BACKLOG 10   // how many pending connections queue will hold
 
-#define MAXBUFLEN 100
+#define MAXBUFLEN 1000
 
 pthread_mutex_t bufferLock;
 
@@ -67,8 +68,8 @@ void* senderRoutine(void* socket_fd) {
         if(pthread_mutex_lock(&bufferLock) != 0) {
             perror("pthread_mutex_lock");
         }
+        
         printf("server: received %s from sender\n", buffer);
-
         if (pthread_mutex_unlock(&bufferLock) != 0) {
            perror("pthread_mutex_unlock");
         }
@@ -88,7 +89,7 @@ void* receiverRoutine(void* socket_fd) {
 
 
     int firstCount = 0;
-    while(recv_fds[firstCount] != 0) {
+    while(recv_fds[firstCount] != 0 && firstCount < BACKLOG) {
         firstCount++;
     }
 
@@ -99,13 +100,15 @@ void* receiverRoutine(void* socket_fd) {
 
         } else {
             int counter = 0;
-            while(recv_fds[counter] != 0) {
+            while(recv_fds[counter] != 0 && counter < BACKLOG) {
              if (send(recv_fds[counter], buffer, MAXBUFLEN, MSG_NOSIGNAL) == -1) {
-                perror("send");
+                if (errno == EPIPE) {
+                    recv_fds[counter] = 0;
+                    }
                 }
+
                 counter++;
             }            
-
 
             // after sending to the receiver, we clear the buffer
             memset(buffer,0,strlen(buffer));
@@ -116,7 +119,7 @@ void* receiverRoutine(void* socket_fd) {
             
         }
     }
-    
+
     close(receiver_fd);
     return 0;
 }
