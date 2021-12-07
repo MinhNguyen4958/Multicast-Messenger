@@ -1,0 +1,54 @@
+Partner: Minh Nguyen
+NSID: thn649
+Student #: 11286346
+
+Main student: Al Joshua Rollo
+NSID: apr213
+Student #: 11214158
+
+Documentation ----------------------------
+Goals - The goal that we are trying to make is to create a server with a multiple sender and receiever clients
+through threading (with a max of 10, this can be changed by redefining BACKLOG in server.c). 
+The main functionality that we are trying to implement with our server is to be a 
+hub of some sort for our multiple sender/receivers. The sender sends from stdin 
+(whether it be a file or from the console) into the server. The server will then receieve and print out 
+that message. The receiver will then grab that message from the server to be displayed 
+alongside its IP address, port and the message itself.
+
+How to run - 
+1) In a terminal, type "make"
+2) type "server" which will run server.c. This will print out the server/receiever ports
+3) Create two terminals, one for sender and one for receiver. 
+4) In the second terminal, type in "sender ${Whatever host name you are in} ${sender port number displayed in first terminal}".
+This will bring up a prompt of you entering a message to be sent
+(4th step NOTE: If you want to redirect a file, type in "sender ${Whatever host name you are in} ${sender port number displayed in first terminal < ${Filename}")
+5) In the third terminal, type in "receiver ${Whatever host name you are in} ${receiever port number displayed in first terminal}".
+6) (Default 10, you can change this in server.c via BACKLOG) You can keep creating any number of terminals
+for sender/receiever as long as the sum of both of them do not go past 10. If they do, they will not work, even
+though they are connected.
+
+
+
+Files - 
+    server.c - This is the server that receieves messages from the sender clients which is then
+    passed on to receievers. This will also print out message from the sender clients
+    sender.c - This is the sender client. You can either input your own message or redirect a file
+    receiver.c - This is the receiver client. This will print out the messages that was sent
+    Makefile - Compiles server.c, sender.c and reciever.c
+
+Limitations -
+    Blank messages (empty strings) will not get sent.
+    BACKLOG will be the amount of sender/receiver that you can have. Any more of sender/receiever will not
+    work even though it is connected
+    MAXBUFLEN (message size) is set to 1000, any more than 1000 messages will hang the program. You can change
+    this macro if you want a longer message
+
+Testing -
+    1) Tested to see if blank messages will get sent. It won't send
+    2) Tested to see if more than MAXBUFLEN messages will work, it will make the program hang (change MAXBUFLEN
+    if you want a longer message)
+    3) Tested to see if creating more than BACKLOG senders + receievers will work. The senders + receievers
+    that was made past BACKLOG will connect BUT NOT work.
+    4) Tested to see if senders will send through different ports
+    5) Tested to see if receivers will receieve through different ports
+    6) Tested to see if multiple receivers will receieve from one sender
