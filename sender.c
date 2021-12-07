@@ -10,7 +10,6 @@
 
 #include <arpa/inet.h>
 
-#define PORT "30000" // the port client will be connecting to 
 
 ssize_t readline(char **lineptr, FILE *stream)
 {
@@ -25,6 +24,7 @@ ssize_t readline(char **lineptr, FILE *stream)
 
   return chars;
 }
+
 // get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa)
 {
@@ -42,8 +42,8 @@ int main(int argc, char *argv[])
     int rv;
     char s[INET6_ADDRSTRLEN];
 
-    if (argc != 2) {
-        fprintf(stderr,"usage: sender hostname\n");
+    if (argc != 3) {
+        fprintf(stderr,"usage: sender hostname port_number\n");
         exit(1);
     }
 
@@ -51,7 +51,7 @@ int main(int argc, char *argv[])
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    if ((rv = getaddrinfo(argv[1], PORT, &hints, &servinfo)) != 0) {
+    if ((rv = getaddrinfo(argv[1], argv[2], &hints, &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         return 1;
     }
@@ -86,17 +86,17 @@ int main(int argc, char *argv[])
     char *message = NULL;
     ssize_t bytes;
 
-    while(1) {
+    while(1 && !feof(stdin)) {
         printf("Enter a message: ");
         if ( (bytes = readline(&message, stdin)) == -1) {
             perror("getline");
         }
 
-        if ((numbytes = send(sockfd, message, strlen(message), 0)) == -1) {
+        if ((numbytes = send(sockfd, message, strlen(message), MSG_NOSIGNAL)) == -1) {
             perror("send");
             exit(1);
         }
-        printf("sender: sent \"%s\" to the server\n", message);
+        printf("sender: sent \"%s\" \n", message);
         free(message);
     }
 

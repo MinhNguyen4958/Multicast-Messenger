@@ -10,8 +10,6 @@
 
 #include <arpa/inet.h>
 
-#define PORT "30001" // the port client will be connecting to 
-
 #define MAXDATASIZE 1000 // max number of bytes we can get at once 
 
 // get sockaddr, IPv4 or IPv6:
@@ -32,8 +30,8 @@ int main(int argc, char *argv[])
     int rv;
     char s[INET6_ADDRSTRLEN];
 
-    if (argc != 2) {
-        fprintf(stderr,"usage: client hostname\n");
+    if (argc != 3) {
+        fprintf(stderr,"usage: receiver hostname port_number\n");
         exit(1);
     }
 
@@ -41,7 +39,7 @@ int main(int argc, char *argv[])
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
 
-    if ((rv = getaddrinfo(argv[1], PORT, &hints, &servinfo)) != 0) {
+    if ((rv = getaddrinfo(argv[1], argv[2], &hints, &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         return 1;
     }
@@ -72,14 +70,12 @@ int main(int argc, char *argv[])
     inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
     printf("receiver: connected to the server\n");
     while(1) {
-        if ((numbytes = recv(sockfd, buf, MAXDATASIZE, 0)) == -1) {
+        if ((numbytes = recv(sockfd, buf, MAXDATASIZE, MSG_NOSIGNAL)) == -1) {
             perror("recv");
             exit(1);
         }
-        printf("receiver: received %s\n",buf); 
+        printf("receiver: %s\n",buf); 
     }
-
-    
 
     close(sockfd);
 
